@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from kafka import KafkaProducer
 from kafka.serializer import Serializer
 
+from schemas.event_schema import FIELD_NAMES, SchemaValidationError, validate_event
+
 
 class JSONValueSerializer(Serializer):
     def serialize(self, topic, headers, data):
@@ -32,6 +34,23 @@ class StringKeySerializer(Serializer):
 class Product:
     product_id: str
     price: float
+
+
+class Stats:
+    """Thread-safe sent/rejected counters (session threads run concurrently)."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.sent = 0
+        self.rejected = 0
+
+    def record_sent(self):
+        with self._lock:
+            self.sent += 1
+
+    def record_rejected(self):
+        with self._lock:
+            self.rejected += 1
 
 
 def build_catalog(size: int) -> list[Product]:
@@ -80,17 +99,30 @@ def generate_session_plan() -> list[str]:
 
 
 def run_session(producer: KafkaProducer, topic: str, catalog: list[Product],
-                 user_id: str, speed: float) -> int:
+                 user_id: str, speed: float, stats: Stats,
+                 inject_malformed_rate: float = 0.0) -> None:
     session_id = str(uuid.uuid4())
     plan = generate_session_plan()
     product = random.choice(catalog)  # v1: one product of interest per session
 
     for event_type in plan:
         event = make_event(user_id, session_id, event_type, product)
-        producer.send(topic, key=session_id, value=event)
-        time.sleep(random.uniform(1.0, 4.0) / speed)
 
-    return len(plan)
+        if random.random() < inject_malformed_rate:
+            # Deliberately corrupt the event to exercise schema enforcement
+            # (Step 3b's "done when" check) — drops one required field.
+            del event[random.choice(FIELD_NAMES)]
+
+        try:
+            validate_event(event)
+        except SchemaValidationError as exc:
+            stats.record_rejected()
+            print(f"[REJECTED] session={session_id} event_type={event_type}: {exc}")
+            continue  # never reaches producer.send
+
+        producer.send(topic, key=session_id, value=event)
+        stats.record_sent()
+        time.sleep(random.uniform(1.0, 4.0) / speed)
 
 
 def main() -> None:
@@ -106,6 +138,10 @@ def main() -> None:
                               "fire (2.0 = twice as fast as real dwell time)")
     parser.add_argument("--duration", type=float, default=None,
                          help="seconds to run for; omit to run until Ctrl+C")
+    parser.add_argument("--inject-malformed-rate", type=float, default=0.0,
+                         help="probability [0-1] of deliberately corrupting an "
+                              "event before validation, to demonstrate schema "
+                              "enforcement (Step 3b). 0 = disabled (default).")
     args = parser.parse_args()
 
     catalog = build_catalog(args.catalog_size)
@@ -121,17 +157,19 @@ def main() -> None:
     session_interval = 60.0 / args.session_rate
     start = time.time()
     session_count = 0
+    stats = Stats()
 
     print(f"Producing to '{args.topic}' at ~{args.session_rate} sessions/min "
-          f"(catalog={args.catalog_size}, users={args.users}, speed={args.speed}x). "
-          f"Ctrl+C to stop.")
+          f"(catalog={args.catalog_size}, users={args.users}, speed={args.speed}x, "
+          f"inject_malformed_rate={args.inject_malformed_rate}). Ctrl+C to stop.")
 
     try:
         while args.duration is None or (time.time() - start) < args.duration:
             user_id = random.choice(users)
             threading.Thread(
                 target=run_session,
-                args=(producer, args.topic, catalog, user_id, args.speed),
+                args=(producer, args.topic, catalog, user_id, args.speed, stats,
+                      args.inject_malformed_rate),
                 daemon=True,
             ).start()
             session_count += 1
@@ -141,7 +179,8 @@ def main() -> None:
     finally:
         producer.flush()
         producer.close()
-        print(f"Started {session_count} sessions.")
+        print(f"Started {session_count} sessions. "
+              f"sent={stats.sent} rejected={stats.rejected}")
 
 
 if __name__ == "__main__":

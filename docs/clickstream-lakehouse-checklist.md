@@ -6,7 +6,7 @@ once its "done when" criterion is verified.
 - [x] Step 1: Environment setup
 - [x] Step 2: Verify Kafka works standalone
 - [x] Step 3: Build the Python producer
-- [ ] Step 3b: Define and enforce the schema contract
+- [x] Step 3b: Define and enforce the schema contract
 - [ ] Step 4: Set up local PySpark + Delta
 - [ ] Step 5: Bronze job — Kafka → Delta
 - [ ] Step 5b: Verify full replay (not just checkpoint-restart)
