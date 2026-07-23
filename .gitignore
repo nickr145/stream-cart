@@ -6,3 +6,7 @@ venv/
 .env
 .ipynb_checkpoints/
 .claude/
+
+# Local lakehouse data (Step 4: local filesystem storage backend, v1)
+/delta/
+/checkpoints/
