@@ -8,7 +8,7 @@ once its "done when" criterion is verified.
 - [x] Step 3: Build the Python producer
 - [x] Step 3b: Define and enforce the schema contract
 - [x] Step 4: Set up local PySpark + Delta
-- [ ] Step 5: Bronze job — Kafka → Delta
+- [x] Step 5: Bronze job — Kafka → Delta
 - [ ] Step 5b: Verify full replay (not just checkpoint-restart)
 - [ ] Step 6: Silver job — clean and dedupe
 - [ ] Step 7: Gold job — windowed aggregation
