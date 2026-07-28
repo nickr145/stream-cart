@@ -153,6 +153,14 @@ silently failing or being dropped by silver's null-filtering later.
   `dropDuplicates(["event_id"])` with watermark.
 - **Late-arriving events** → watermarking in gold-layer windowed aggregation;
   decide and document how late is "too late" (events dropped vs. handled).
+- **Watermark advancement lags one micro-batch** (verified in Step 7) → the
+  watermark used to decide a window is "final" in micro-batch N is computed
+  from micro-batch N-1's max event-time, not N's own. In discrete start/stop
+  testing this means gold's most recent windows can look "stuck" even after
+  feeding in newer data — full convergence needs another later batch to
+  actually apply the newly-advanced watermark. Not a bug; just don't expect
+  gold's totals to fully reconcile with silver's until the pipeline has run
+  continuously for a while (see Step 10).
 - **Schema drift** (new fields added to events) → Delta schema evolution
   (`mergeSchema` option); should not break existing streaming jobs.
 - **Streaming job restart** → checkpointing must guarantee exactly-once /
