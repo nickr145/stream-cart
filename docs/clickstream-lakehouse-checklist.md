@@ -12,7 +12,7 @@ once its "done when" criterion is verified.
 - [x] Step 5b: Verify full replay (not just checkpoint-restart)
 - [x] Step 6: Silver job — clean and dedupe
 - [x] Step 7: Gold job — windowed aggregation
-- [ ] Step 8: Funnel batch job
+- [x] Step 8: Funnel batch job
 - [ ] Step 9: Query layer
 - [ ] Step 9b: Reset/cleanup tooling
 - [ ] Step 10: End-to-end smoke test
